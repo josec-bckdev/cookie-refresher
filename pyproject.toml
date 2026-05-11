@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cookie-refresher"
+version = "1.0.0"
+description = "AI agent that refreshes vtrack session cookies via Claude Computer Use"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.52.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "apscheduler>=3.10.0",
+    "python-dotenv>=1.0.0",
+    "docker>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.27.0",  # for TestClient
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--tb=short -q"
+
+[tool.coverage.run]
+source = ["src/cookie_refresher"]
+omit = [
+    "*/tests/*",
+    "*/infrastructure/main.py",    # Framework wiring — tested via docker-compose
+    "*/infrastructure/settings.py", # pydantic-settings config — no business logic
+    "*/infrastructure/scheduler.py",       # APScheduler glue — no business logic
+    "*/infrastructure/anthropic_client.py", # Anthropic SDK wiring — tested via live integration
+    "*/adapters/gateways/*.py",            # Thin HTTP wrappers — tested via live integration
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

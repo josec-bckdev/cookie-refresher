@@ -1,0 +1,48 @@
+services:
+  # Headful Chromium + noVNC viewer — managed on-demand by cookie-refresher.
+  # NOT started automatically. cookie-refresher starts/stops it per refresh cycle.
+  #
+  # First-time setup (build image + create stopped container):
+  #   docker compose --profile on-demand up --build --no-start
+  #
+  # Observe a live run: http://localhost:6080/vnc.html?autoconnect=1&resize=scale
+  vnc-browser:
+    profiles: [on-demand]
+    build:
+      context: ./vnc-browser
+    container_name: vnc_browser
+    restart: "no"
+    ports:
+      - "6080:6080"   # noVNC web viewer
+      - "5900:5900"   # raw VNC (optional)
+      - "8080:8080"   # browser control API — dev/debug only
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 25s
+      retries: 3
+    networks:
+      - cookie-net
+
+  # AI agent — ReAct loop via Claude Computer Use.
+  # Starts/stops the vnc-browser container via the Docker socket.
+  cookie-refresher:
+    build:
+      context: .
+    container_name: cookie_refresher
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      VNC_BROWSER_URL: http://vnc-browser:8080
+      VNC_CONTAINER_NAME: vnc_browser
+    ports:
+      - "8001:8001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cookie-net
+
+networks:
+  cookie-net:
+    driver: bridge
