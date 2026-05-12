@@ -36,13 +36,18 @@ services:
     environment:
       VNC_BROWSER_URL: http://vnc-browser:8080
       VNC_CONTAINER_NAME: vnc_browser
+      VTRACK_API_URL: http://api:8000
     ports:
       - "8001:8001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - cookie-net
+      - vtrack-network
 
 networks:
   cookie-net:
     driver: bridge
+  vtrack-network:
+    external: true
+    name: vtrack-network
