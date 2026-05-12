@@ -1,6 +1,6 @@
 """RED: domain entity invariants — run before any implementation exists."""
 import pytest
-from cookie_refresher.domain.entities import SessionCookies, AgentResult
+from cookie_refresher.domain.entities import SessionCookies, AgentResult, Job, JobStatus
 
 
 class TestSessionCookies:
@@ -62,3 +62,24 @@ class TestAgentResult:
     def test_failure_requires_error_message(self):
         with pytest.raises((TypeError, ValueError)):
             AgentResult.fail("", steps_taken=1)
+
+
+class TestJob:
+    def test_new_job_has_processing_status(self):
+        job = Job(id="abc-123", status=JobStatus.PROCESSING)
+        assert job.status == JobStatus.PROCESSING
+        assert job.id == "abc-123"
+        assert job.steps_taken is None
+        assert job.error is None
+
+    def test_job_status_values(self):
+        assert JobStatus.PROCESSING == "processing"
+        assert JobStatus.SUCCESS == "success"
+        assert JobStatus.FAILED == "failed"
+
+    def test_job_is_mutable(self):
+        job = Job(id="x", status=JobStatus.PROCESSING)
+        job.status = JobStatus.SUCCESS
+        job.steps_taken = 7
+        assert job.status == JobStatus.SUCCESS
+        assert job.steps_taken == 7
