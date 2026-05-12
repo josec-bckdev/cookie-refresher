@@ -1,7 +1,22 @@
 """Pure domain entities — no framework imports, no I/O."""
 from __future__ import annotations
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
+
+
+class JobStatus(str, Enum):
+    PROCESSING = "processing"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+@dataclass
+class Job:
+    id: str
+    status: JobStatus
+    steps_taken: Optional[int] = None
+    error: Optional[str] = None
 
 
 @dataclass(frozen=True)

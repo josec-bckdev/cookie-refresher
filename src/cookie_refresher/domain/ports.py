@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from .entities import SessionCookies, AgentStep
+from .entities import AgentResult, Job, SessionCookies, AgentStep
 
 
 class IBrowserGateway(ABC):
@@ -62,3 +62,16 @@ class IAgentClient(ABC):
 
     @abstractmethod
     async def complete(self, messages: list[dict]) -> AgentStep: ...
+
+
+class IJobStore(ABC):
+    """Tracks the lifecycle of async refresh jobs."""
+
+    @abstractmethod
+    async def create(self) -> Job: ...
+
+    @abstractmethod
+    async def get(self, job_id: str) -> Optional[Job]: ...
+
+    @abstractmethod
+    async def update(self, job_id: str, result: AgentResult) -> None: ...
