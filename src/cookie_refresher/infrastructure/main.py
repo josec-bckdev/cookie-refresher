@@ -17,7 +17,8 @@ from contextlib import asynccontextmanager
 import anthropic
 from fastapi import FastAPI
 
-from cookie_refresher.adapters.controllers.api import router, set_use_case_factory
+from cookie_refresher.adapters.controllers.api import router, set_job_store, set_use_case_factory
+from cookie_refresher.adapters.job_store import InMemoryJobStore
 from cookie_refresher.adapters.gateways.vnc_browser import VncBrowserGateway
 from cookie_refresher.adapters.gateways.vtrack_http import VtrackHttpGateway
 from cookie_refresher.application.use_cases.refresh_session import RefreshSessionUseCase
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
     logger.info("cookie-refresher starting up")
 
     set_use_case_factory(_build_use_case)
+    set_job_store(InMemoryJobStore())
 
     async def _run_scheduled_refresh() -> None:
         use_case = _build_use_case()
