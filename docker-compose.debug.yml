@@ -1,0 +1,15 @@
+services:
+  cookie-refresher:
+    build:
+      args:
+        DEV: "true"
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "5678:5678"
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: >
+      python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678 --wait-for-client
+      -m uvicorn cookie_refresher.infrastructure.main:app
+      --host 0.0.0.0 --port 8001

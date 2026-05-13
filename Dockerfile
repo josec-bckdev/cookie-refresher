@@ -8,9 +8,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps — copy src/ first so setuptools can find the package
+ARG DEV=false
 COPY pyproject.toml .
 COPY src/ ./src/
-RUN pip install --no-cache-dir .
+RUN if [ "$DEV" = "true" ]; then \
+      pip install --no-cache-dir -e ".[dev]"; \
+    else \
+      pip install --no-cache-dir .; \
+    fi
 
 EXPOSE 8001
 
