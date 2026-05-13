@@ -69,7 +69,31 @@ class AnthropicAgentClient(IAgentClient):
         self._model = model
         self._max_tokens = max_tokens
 
+    @staticmethod
+    def _prune_old_screenshots(messages: list[dict]) -> None:
+        """Replace all but the latest screenshot with a text placeholder to cap token cost."""
+        _PLACEHOLDER = {"type": "text", "text": "[screenshot omitted]"}
+        image_refs: list[tuple] = []
+
+        for msg in messages:
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            for i, block in enumerate(content):
+                if block.get("type") == "image":
+                    image_refs.append((content, i))
+                elif block.get("type") == "tool_result":
+                    inner = block.get("content")
+                    if isinstance(inner, list):
+                        for j, inner_block in enumerate(inner):
+                            if inner_block.get("type") == "image":
+                                image_refs.append((inner, j))
+
+        for content_list, idx in image_refs[:-1]:
+            content_list[idx] = _PLACEHOLDER
+
     async def complete(self, messages: list[dict]) -> AgentStep:
+        self._prune_old_screenshots(messages)
         response = await self._beta_messages.create(
             model=self._model,
             max_tokens=self._max_tokens,
@@ -80,11 +104,15 @@ class AnthropicAgentClient(IAgentClient):
             betas=["computer-use-2025-11-24"],
         )
 
-        logger.debug(
-            "Anthropic response — stop_reason=%s blocks=%d",
-            response.stop_reason,
-            len(response.content),
+        u = response.usage
+        logger.info(
+            "Agent API usage — input: %d, output: %d, cache_read: %d, cache_write: %d",
+            u.input_tokens,
+            u.output_tokens,
+            getattr(u, "cache_read_input_tokens", 0) or 0,
+            getattr(u, "cache_creation_input_tokens", 0) or 0,
         )
+        logger.debug("Anthropic response — stop_reason=%s blocks=%d", response.stop_reason, len(response.content))
 
         actions: list[ActionRequest] = []
         cookies: Optional[SessionCookies] = None
