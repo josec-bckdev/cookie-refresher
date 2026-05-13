@@ -63,6 +63,22 @@ class TestAgentResult:
         with pytest.raises((TypeError, ValueError)):
             AgentResult.fail("", steps_taken=1)
 
+    def test_ok_carries_messages(self):
+        cookies = SessionCookies(cf_clearance="abc", ci_session="xyz")
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]
+        result = AgentResult.ok(cookies, steps_taken=1, messages=msgs)
+        assert result.messages == msgs
+
+    def test_fail_carries_messages(self):
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]
+        result = AgentResult.fail("boom", steps_taken=1, messages=msgs)
+        assert result.messages == msgs
+
+    def test_messages_defaults_to_empty_list(self):
+        cookies = SessionCookies(cf_clearance="abc", ci_session="xyz")
+        result = AgentResult.ok(cookies, steps_taken=1)
+        assert result.messages == []
+
 
 class TestJob:
     def test_new_job_has_processing_status(self):
@@ -71,6 +87,7 @@ class TestJob:
         assert job.id == "abc-123"
         assert job.steps_taken is None
         assert job.error is None
+        assert job.messages == []
 
     def test_job_status_values(self):
         assert JobStatus.PROCESSING == "processing"

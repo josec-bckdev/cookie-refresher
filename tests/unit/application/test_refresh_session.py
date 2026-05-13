@@ -6,6 +6,31 @@ from cookie_refresher.domain.ports import IBrowserGateway, IVtrackGateway, IAgen
 from cookie_refresher.application.use_cases.refresh_session import RefreshSessionUseCase
 
 
+class TestRedact:
+    def test_replaces_email_in_text_block(self):
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "Email: user@x.com here"}]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert "user@x.com" not in result[0]["content"][0]["text"]
+        assert "[REDACTED]" in result[0]["content"][0]["text"]
+
+    def test_replaces_password_in_text_block(self):
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "Password: secret here"}]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert "secret" not in result[0]["content"][0]["text"]
+        assert "[REDACTED]" in result[0]["content"][0]["text"]
+
+    def test_non_text_blocks_untouched(self):
+        img = {"type": "image", "source": {"data": "abc123"}}
+        msgs = [{"role": "user", "content": [img]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert result[0]["content"][0] == img
+
+    def test_returns_independent_copy(self):
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "Email: user@x.com"}]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert msgs[0]["content"][0]["text"] == "Email: user@x.com"  # original unchanged
+
+
 COOKIES = SessionCookies(cf_clearance="cf_tok", ci_session="ci_tok")
 FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 

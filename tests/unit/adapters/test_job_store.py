@@ -61,3 +61,13 @@ class TestInMemoryJobStore:
     async def test_update_unknown_job_is_a_noop(self, store):
         agent_result = AgentResult.ok(COOKIES, steps_taken=3)
         await store.update("ghost-id", agent_result)
+
+    @pytest.mark.asyncio
+    async def test_update_stores_messages_on_job(self, store):
+        job = await store.create()
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        agent_result = AgentResult.ok(COOKIES, steps_taken=2, messages=msgs)
+        await store.update(job.id, agent_result)
+
+        updated = await store.get(job.id)
+        assert updated.messages == msgs

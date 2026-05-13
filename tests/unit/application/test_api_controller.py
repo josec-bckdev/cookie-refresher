@@ -71,6 +71,18 @@ class TestPostRefreshEndpoint:
         assert body["steps_taken"] == 4
         assert body["error"] is None
 
+    def test_status_response_includes_messages(self):
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "task"}]}]
+        mock_use_case = AsyncMock()
+        mock_use_case.execute.return_value = AgentResult.ok(COOKIES, steps_taken=1, messages=msgs)
+        api_module.set_use_case_factory(lambda: mock_use_case)
+
+        client = TestClient(_make_test_app())
+        job_id = client.post("/refresh").json()["job_id"]
+
+        body = client.get(f"/refresh/{job_id}").json()
+        assert body["messages"] == msgs
+
     def test_background_task_updates_store_on_failure(self):
         mock_use_case = AsyncMock()
         mock_use_case.execute.return_value = AgentResult.fail(
