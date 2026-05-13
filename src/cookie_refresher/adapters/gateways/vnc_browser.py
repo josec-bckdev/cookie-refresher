@@ -53,7 +53,24 @@ class VncBrowserGateway(IBrowserGateway):
             )
 
         if container.status != "running":
-            container.start()
+            try:
+                container.start()
+            except docker.errors.NotFound as exc:
+                # Stale container whose network was deleted (e.g. after `docker compose down`).
+                # Remove it so the operator can recreate with `docker compose ... up --no-start`.
+                logger.warning(
+                    "Container '%s' has a missing network — removing stale container: %s",
+                    self._container_name,
+                    exc,
+                )
+                try:
+                    container.remove(force=True)
+                except Exception as remove_exc:
+                    logger.warning("Failed to remove stale container: %s", remove_exc)
+                raise RuntimeError(
+                    f"VNC browser container '{self._container_name}' had a stale network and was removed. "
+                    "Recreate it with: docker compose --profile on-demand up --build --no-start"
+                ) from exc
             logger.info("Container started — waiting for Chromium to be ready")
         else:
             logger.info("Container already running — waiting for health check")
