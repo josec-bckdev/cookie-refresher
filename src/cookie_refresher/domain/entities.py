@@ -17,6 +17,7 @@ class Job:
     status: JobStatus
     steps_taken: Optional[int] = None
     error: Optional[str] = None
+    messages: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -56,17 +57,18 @@ class AgentResult:
     cookies: Optional[SessionCookies]
     error: Optional[str]
     steps_taken: int
+    messages: list = field(default_factory=list)
 
     @classmethod
-    def ok(cls, cookies: SessionCookies, steps_taken: int) -> "AgentResult":
+    def ok(cls, cookies: SessionCookies, steps_taken: int, messages: list | None = None) -> "AgentResult":
         """Factory for a successful result."""
         if cookies is None:
             raise ValueError("cookies required for a success result")
-        return cls(success=True, cookies=cookies, error=None, steps_taken=steps_taken)
+        return cls(success=True, cookies=cookies, error=None, steps_taken=steps_taken, messages=messages or [])
 
     @classmethod
-    def fail(cls, error: str, steps_taken: int) -> "AgentResult":
+    def fail(cls, error: str, steps_taken: int, messages: list | None = None) -> "AgentResult":
         """Factory for a failed result."""
         if not error:
             raise ValueError("error message required for a failure result")
-        return cls(success=False, cookies=None, error=error, steps_taken=steps_taken)
+        return cls(success=False, cookies=None, error=error, steps_taken=steps_taken, messages=messages or [])

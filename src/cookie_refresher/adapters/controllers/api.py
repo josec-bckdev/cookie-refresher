@@ -32,6 +32,7 @@ class RefreshJobResponse(BaseModel):
     status: str
     steps_taken: Optional[int] = None
     error: Optional[str] = None
+    messages: Optional[list] = None
 
 
 @router.get("/health")
@@ -65,6 +66,7 @@ async def get_refresh_status(job_id: str):
         status=job.status.value,
         steps_taken=job.steps_taken,
         error=job.error,
+        messages=job.messages or None,
     )
 
 

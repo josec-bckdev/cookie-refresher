@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import logging
 from typing import Optional
 
@@ -181,7 +182,7 @@ class RefreshSessionUseCase:
             step += 1
 
             if agent_step.is_done:
-                return await self._finalise(agent_step.cookies, step)
+                return await self._finalise(agent_step.cookies, step, messages)
 
             # Execute actions and feed results back as user turn
             tool_results = await self._execute_actions(agent_step.actions)
@@ -191,13 +192,20 @@ class RefreshSessionUseCase:
         return AgentResult.fail(
             f"Max steps ({self._max_steps}) exceeded without extracting cookies",
             steps_taken=step,
+            messages=self._redact(messages, self._login_email, self._login_password),
         )
 
     async def _finalise(
-        self, cookies: Optional[SessionCookies], steps: int
+        self, cookies: Optional[SessionCookies], steps: int, messages: list
     ) -> AgentResult:
+        redacted = self._redact(messages, self._login_email, self._login_password)
+
         if cookies is None:
-            return AgentResult.fail("Agent signalled done but provided no cookies", steps_taken=steps)
+            return AgentResult.fail(
+                "Agent signalled done but provided no cookies",
+                steps_taken=steps,
+                messages=redacted,
+            )
 
         logger.info("Cookies extracted — posting to vtrack")
         posted = await self._vtrack.post_cookies(cookies)
@@ -206,10 +214,11 @@ class RefreshSessionUseCase:
             return AgentResult.fail(
                 "Cookies extracted but vtrack rejected the POST request",
                 steps_taken=steps,
+                messages=redacted,
             )
 
         logger.info("Session refreshed successfully in %d steps", steps)
-        return AgentResult.ok(cookies, steps_taken=steps)
+        return AgentResult.ok(cookies, steps_taken=steps, messages=redacted)
 
     async def _execute_actions(self, actions) -> list[dict]:
         tool_results = []
@@ -297,6 +306,19 @@ class RefreshSessionUseCase:
         updated = list(messages)
         updated.append({"role": "user", "content": [image_content]})
         return updated
+
+    @staticmethod
+    def _redact(messages: list, email: str, password: str) -> list:
+        """Return a deep copy of messages with email and password replaced."""
+        redacted = copy.deepcopy(messages)
+        for msg in redacted:
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if block.get("type") == "text":
+                    block["text"] = block["text"].replace(email, "[REDACTED]").replace(password, "[REDACTED]")
+        return redacted
 
     @staticmethod
     def _build_assistant_content(agent_step) -> list[dict]:
