@@ -1,6 +1,7 @@
 """RED: domain entity invariants — run before any implementation exists."""
 import pytest
-from cookie_refresher.domain.entities import SessionCookies, AgentResult, Job, JobStatus
+from datetime import datetime
+from cookie_refresher.domain.entities import SessionCookies, AgentResult, Job, JobStatus, RecordedStep, ActionScript
 
 
 class TestSessionCookies:
@@ -100,3 +101,71 @@ class TestJob:
         job.steps_taken = 7
         assert job.status == JobStatus.SUCCESS
         assert job.steps_taken == 7
+
+
+class TestRecordedStep:
+    def test_valid_creation(self):
+        step = RecordedStep(
+            action_type="left_click",
+            params={"coordinate": [642, 470]},
+            delay_after_ms=520.0,
+        )
+        assert step.action_type == "left_click"
+        assert step.params == {"coordinate": [642, 470]}
+        assert step.delay_after_ms == 520.0
+
+    def test_is_immutable(self):
+        step = RecordedStep(action_type="key", params={"text": "F12"}, delay_after_ms=100.0)
+        with pytest.raises((AttributeError, TypeError)):
+            step.action_type = "left_click"  # type: ignore[misc]
+
+    def test_equality_by_value(self):
+        a = RecordedStep(action_type="type", params={"text": "{{email}}"}, delay_after_ms=200.0)
+        b = RecordedStep(action_type="type", params={"text": "{{email}}"}, delay_after_ms=200.0)
+        assert a == b
+
+    def test_inequality_when_params_differ(self):
+        a = RecordedStep(action_type="left_click", params={"coordinate": [100, 200]}, delay_after_ms=100.0)
+        b = RecordedStep(action_type="left_click", params={"coordinate": [300, 400]}, delay_after_ms=100.0)
+        assert a != b
+
+    def test_masked_credential_sentinel_stored(self):
+        step = RecordedStep(action_type="type", params={"text": "{{password}}"}, delay_after_ms=300.0)
+        assert step.params["text"] == "{{password}}"
+
+    def test_scroll_params_stored(self):
+        step = RecordedStep(
+            action_type="scroll",
+            params={"coordinate": [740, 800], "scroll_direction": "down", "scroll_amount": 5},
+            delay_after_ms=150.0,
+        )
+        assert step.params["scroll_direction"] == "down"
+        assert step.params["scroll_amount"] == 5
+
+
+class TestActionScript:
+    def test_valid_creation(self):
+        steps = [RecordedStep("left_click", {"coordinate": [100, 200]}, 500.0)]
+        recorded_at = datetime(2026, 5, 13, 12, 0, 0)
+        script = ActionScript(steps=steps, recorded_at=recorded_at)
+        assert script.steps == steps
+        assert script.recorded_at == recorded_at
+        assert script.use_count == 0
+
+    def test_use_count_defaults_to_zero(self):
+        script = ActionScript(steps=[], recorded_at=datetime.utcnow())
+        assert script.use_count == 0
+
+    def test_is_mutable(self):
+        script = ActionScript(steps=[], recorded_at=datetime.utcnow())
+        script.use_count = 5
+        assert script.use_count == 5
+
+    def test_steps_list_preserves_order(self):
+        s1 = RecordedStep("left_click", {"coordinate": [100, 200]}, 500.0)
+        s2 = RecordedStep("type", {"text": "{{email}}"}, 300.0)
+        s3 = RecordedStep("key", {"text": "Return"}, 100.0)
+        script = ActionScript(steps=[s1, s2, s3], recorded_at=datetime.utcnow())
+        assert script.steps[0] == s1
+        assert script.steps[1] == s2
+        assert script.steps[2] == s3
