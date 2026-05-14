@@ -12,12 +12,26 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
+class RunMode(str, Enum):
+    AGENT = "agent"
+    REPLAY = "replay"
+
+
+class FailureReason(str, Enum):
+    NO_COOKIES = "no_cookies"
+    VTRACK_POST_FAILED = "vtrack_post_failed"
+    MAX_STEPS_EXCEEDED = "max_steps_exceeded"
+    EXCEPTION = "exception"
+
+
 @dataclass
 class Job:
     id: str
     status: JobStatus
     steps_taken: Optional[int] = None
     error: Optional[str] = None
+    mode: Optional[RunMode] = None
+    failure_reason: Optional[FailureReason] = None
     messages: list = field(default_factory=list)
 
 
@@ -58,21 +72,38 @@ class AgentResult:
     cookies: Optional[SessionCookies]
     error: Optional[str]
     steps_taken: int
+    mode: Optional[RunMode] = None
+    failure_reason: Optional[FailureReason] = None
     messages: list = field(default_factory=list)
 
     @classmethod
-    def ok(cls, cookies: SessionCookies, steps_taken: int, messages: list | None = None) -> "AgentResult":
+    def ok(
+        cls,
+        cookies: SessionCookies,
+        steps_taken: int,
+        mode: Optional[RunMode] = None,
+        messages: list | None = None,
+    ) -> "AgentResult":
         """Factory for a successful result."""
         if cookies is None:
             raise ValueError("cookies required for a success result")
-        return cls(success=True, cookies=cookies, error=None, steps_taken=steps_taken, messages=messages or [])
+        return cls(success=True, cookies=cookies, error=None, steps_taken=steps_taken,
+                   mode=mode, failure_reason=None, messages=messages or [])
 
     @classmethod
-    def fail(cls, error: str, steps_taken: int, messages: list | None = None) -> "AgentResult":
+    def fail(
+        cls,
+        error: str,
+        steps_taken: int,
+        mode: Optional[RunMode] = None,
+        failure_reason: Optional[FailureReason] = None,
+        messages: list | None = None,
+    ) -> "AgentResult":
         """Factory for a failed result."""
         if not error:
             raise ValueError("error message required for a failure result")
-        return cls(success=False, cookies=None, error=error, steps_taken=steps_taken, messages=messages or [])
+        return cls(success=False, cookies=None, error=error, steps_taken=steps_taken,
+                   mode=mode, failure_reason=failure_reason, messages=messages or [])
 
 
 @dataclass(frozen=True)
