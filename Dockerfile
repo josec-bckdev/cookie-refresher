@@ -17,6 +17,11 @@ RUN if [ "$DEV" = "true" ]; then \
       pip install --no-cache-dir .; \
     fi
 
+# Seed the action script so the volume is pre-populated on first deploy.
+# Docker copies image content into an empty named volume on first mount.
+# On subsequent restarts the volume retains whatever the service recorded.
+COPY data/action_script.json /data/action_script.json
+
 EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
