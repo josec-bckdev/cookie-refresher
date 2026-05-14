@@ -1,0 +1,43 @@
+service:
+  extensions: [healthcheckv2, jaeger_storage, jaeger_query]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [jaeger_storage_exporter]
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+      endpoint: 0.0.0.0:14269
+
+  jaeger_storage:
+    backends:
+      local:
+        badger:
+          directories:
+            keys: /badger/key
+            values: /badger/data
+          ephemeral: false
+          maintenance_interval: 5m
+          metrics_update_interval: 10s
+
+  jaeger_query:
+    storage:
+      traces: local
+    http:
+      endpoint: 0.0.0.0:16686
+    grpc:
+      endpoint: 0.0.0.0:16685
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: local
