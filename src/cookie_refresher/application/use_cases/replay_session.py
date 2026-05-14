@@ -56,11 +56,13 @@ class ReplaySessionUseCase:
     async def _run_replay(self) -> AgentResult:
         await self._browser.navigate(self._login_url)
 
-        for step in self._script.steps:
+        for i, step in enumerate(self._script.steps):
             params = self._resolve_credentials(step.params, step.action_type)
             await self._dispatcher.dispatch({**params, "action": step.action_type})
             delay_s = self._jitter(step.delay_after_ms) / 1000
             await asyncio.sleep(delay_s)
+            await self._browser.take_screenshot()
+            logger.debug("Step %d/%d screenshot saved (%s)", i + 1, len(self._script.steps), step.action_type)
 
         screenshot = await self._browser.take_screenshot()
         messages = self._build_extract_message(screenshot)
