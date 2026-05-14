@@ -318,6 +318,10 @@ class RefreshSessionUseCase:
             for block in content:
                 if block.get("type") == "text":
                     block["text"] = block["text"].replace(email, "[REDACTED]").replace(password, "[REDACTED]")
+                elif block.get("type") == "tool_use":
+                    inp = block.get("input", {})
+                    if inp.get("action") == "type" and isinstance(inp.get("text"), str):
+                        inp["text"] = inp["text"].replace(email, "[REDACTED]").replace(password, "[REDACTED]")
         return redacted
 
     @staticmethod

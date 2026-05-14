@@ -30,6 +30,30 @@ class TestRedact:
         result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
         assert msgs[0]["content"][0]["text"] == "Email: user@x.com"  # original unchanged
 
+    def test_redacts_email_in_tool_use_type_action(self):
+        msgs = [{"role": "assistant", "content": [
+            {"type": "tool_use", "id": "tu_1", "name": "computer",
+             "input": {"action": "type", "text": "user@x.com"}}
+        ]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert result[0]["content"][0]["input"]["text"] == "[REDACTED]"
+
+    def test_redacts_password_in_tool_use_type_action(self):
+        msgs = [{"role": "assistant", "content": [
+            {"type": "tool_use", "id": "tu_2", "name": "computer",
+             "input": {"action": "type", "text": "secret"}}
+        ]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert result[0]["content"][0]["input"]["text"] == "[REDACTED]"
+
+    def test_does_not_redact_non_type_tool_use(self):
+        inp = {"action": "left_click", "coordinate": [100, 200]}
+        msgs = [{"role": "assistant", "content": [
+            {"type": "tool_use", "id": "tu_3", "name": "computer", "input": dict(inp)}
+        ]}]
+        result = RefreshSessionUseCase._redact(msgs, "user@x.com", "secret")
+        assert result[0]["content"][0]["input"] == inp
+
 
 COOKIES = SessionCookies(cf_clearance="cf_tok", ci_session="ci_tok")
 FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
