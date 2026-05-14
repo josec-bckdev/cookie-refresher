@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from .entities import AgentResult, Job, SessionCookies, AgentStep
+from .entities import ActionScript, AgentResult, Job, SessionCookies, AgentStep
 
 
 class IBrowserGateway(ABC):
@@ -75,3 +75,13 @@ class IJobStore(ABC):
 
     @abstractmethod
     async def update(self, job_id: str, result: AgentResult) -> None: ...
+
+
+class IActionScriptStore(ABC):
+    """Persists and retrieves the recorded action script."""
+
+    @abstractmethod
+    async def save(self, script: ActionScript) -> None: ...
+
+    @abstractmethod
+    async def load(self) -> Optional[ActionScript]: ...
