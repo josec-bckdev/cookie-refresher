@@ -18,6 +18,8 @@ from contextlib import asynccontextmanager
 
 import anthropic
 from fastapi import FastAPI
+from opentelemetry import trace
+from opentelemetry.trace import StatusCode
 
 from cookie_refresher.adapters.action_script_store import FileActionScriptStore
 from cookie_refresher.adapters.controllers.api import router, set_job_store, set_use_case_factory
@@ -29,6 +31,7 @@ from cookie_refresher.application.use_cases.replay_session import ReplaySessionU
 from cookie_refresher.infrastructure.anthropic_client import AnthropicAgentClient
 from cookie_refresher.infrastructure.scheduler import build_scheduler
 from cookie_refresher.infrastructure.settings import settings
+from cookie_refresher.infrastructure.telemetry import setup_telemetry
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -47,7 +50,11 @@ def _make_agent() -> AnthropicAgentClient:
 
 
 def _make_browser() -> VncBrowserGateway:
-    return VncBrowserGateway(settings.vnc_browser_url, settings.vnc_container_name)
+    return VncBrowserGateway(
+        settings.vnc_browser_url,
+        settings.vnc_container_name,
+        screenshots_dir=settings.screenshots_dir,
+    )
 
 
 def _make_vtrack() -> VtrackHttpGateway:
@@ -86,20 +93,29 @@ async def _build_use_case():
     )
 
 
+_tracer = trace.get_tracer(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("cookie-refresher starting up")
+    setup_telemetry(app, settings.otlp_endpoint)
 
     set_use_case_factory(_build_use_case)
     set_job_store(InMemoryJobStore())
 
     async def _run_scheduled_refresh() -> None:
-        use_case = await _build_use_case()
-        result = await use_case.execute()
-        if result.success:
-            logger.info("Scheduled refresh succeeded in %d steps", result.steps_taken)
-        else:
-            logger.error("Scheduled refresh failed: %s", result.error)
+        with _tracer.start_as_current_span("refresh.scheduled") as span:
+            use_case = await _build_use_case()
+            result = await use_case.execute()
+            span.set_attribute("job.mode", result.mode or "unknown")
+            span.set_attribute("job.steps_taken", result.steps_taken)
+            if result.success:
+                logger.info("Scheduled refresh succeeded in %d steps", result.steps_taken)
+            else:
+                span.set_status(StatusCode.ERROR, result.error or "")
+                span.set_attribute("job.failure_reason", result.failure_reason or "unknown")
+                logger.error("Scheduled refresh failed: %s", result.error)
 
     scheduler = build_scheduler(_run_scheduled_refresh)
     scheduler.start()

@@ -4,6 +4,8 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from opentelemetry import trace
+from opentelemetry.trace import StatusCode
 from pydantic import BaseModel, Field
 
 from cookie_refresher.domain.entities import AgentResult, FailureReason
@@ -107,16 +109,24 @@ async def get_refresh_status(job_id: str):
     )
 
 
+_tracer = trace.get_tracer(__name__)
+
+
 async def _run_refresh(use_case_factory, job_store: IJobStore, job_id: str) -> None:
-    if inspect.iscoroutinefunction(use_case_factory):
-        use_case = await use_case_factory()
-    else:
-        use_case = use_case_factory()
-    try:
-        result: AgentResult = await use_case.execute()
-    except Exception as exc:
-        logger.exception("Unhandled error in refresh job %s", job_id)
-        result = AgentResult.fail(str(exc), steps_taken=0, failure_reason=FailureReason.EXCEPTION)
-    if not result.success:
-        logger.warning("Refresh job %s failed: %s", job_id, result.error)
-    await job_store.update(job_id, result)
+    with _tracer.start_as_current_span("refresh.job", attributes={"job.id": job_id}) as span:
+        if inspect.iscoroutinefunction(use_case_factory):
+            use_case = await use_case_factory()
+        else:
+            use_case = use_case_factory()
+        try:
+            result: AgentResult = await use_case.execute()
+        except Exception as exc:
+            logger.exception("Unhandled error in refresh job %s", job_id)
+            result = AgentResult.fail(str(exc), steps_taken=0, failure_reason=FailureReason.EXCEPTION)
+        span.set_attribute("job.mode", result.mode or "unknown")
+        span.set_attribute("job.steps_taken", result.steps_taken)
+        if not result.success:
+            span.set_status(StatusCode.ERROR, result.error or "")
+            span.set_attribute("job.failure_reason", result.failure_reason or "unknown")
+            logger.warning("Refresh job %s failed: %s", job_id, result.error)
+        await job_store.update(job_id, result)
