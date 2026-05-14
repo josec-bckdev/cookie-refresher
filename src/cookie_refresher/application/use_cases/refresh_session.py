@@ -19,10 +19,12 @@ import asyncio
 import base64
 import copy
 import logging
+import time
+from datetime import datetime, timezone
 from typing import Optional
 
-from cookie_refresher.domain.entities import AgentResult, SessionCookies
-from cookie_refresher.domain.ports import IBrowserGateway, IVtrackGateway, IAgentClient
+from cookie_refresher.domain.entities import ActionScript, AgentResult, RecordedStep, SessionCookies
+from cookie_refresher.domain.ports import IBrowserGateway, IVtrackGateway, IAgentClient, IActionScriptStore
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +135,8 @@ class RefreshSessionUseCase:
         login_password: str,
         max_steps: int = DEFAULT_MAX_STEPS,
         login_url: str = LOGIN_URL,
+        script_store: Optional[IActionScriptStore] = None,
+        max_inter_step_ms: float = 3000.0,
     ) -> None:
         self._browser = browser
         self._vtrack = vtrack
@@ -141,6 +145,8 @@ class RefreshSessionUseCase:
         self._login_password = login_password
         self._max_steps = max_steps
         self._login_url = login_url
+        self._script_store = script_store
+        self._max_inter_step_ms = max_inter_step_ms
         self._dispatcher = ActionDispatcher(browser)
 
     async def execute(self) -> AgentResult:
@@ -156,6 +162,8 @@ class RefreshSessionUseCase:
         await self._browser.navigate(self._login_url)
 
         messages: list[dict] = []
+        all_recorded: list[RecordedStep] = []
+        t_last_step_end: Optional[float] = None
         step = 0
 
         while step < self._max_steps:
@@ -174,7 +182,6 @@ class RefreshSessionUseCase:
                 action_types = ", ".join(a.action_type for a in agent_step.actions)
                 logger.info("Step %d dispatching: [%s]", step + 1, action_types)
 
-            # Append assistant turn
             messages.append(
                 {"role": "assistant", "content": self._build_assistant_content(agent_step)}
             )
@@ -182,10 +189,27 @@ class RefreshSessionUseCase:
             step += 1
 
             if agent_step.is_done:
-                return await self._finalise(agent_step.cookies, step, messages)
+                result = await self._finalise(agent_step.cookies, step, messages)
+                if result.success and self._script_store:
+                    script = ActionScript(steps=all_recorded, recorded_at=datetime.now(timezone.utc))
+                    await self._script_store.save(script)
+                    logger.info("Action script recorded: %d steps", len(all_recorded))
+                return result
 
-            # Execute actions and feed results back as user turn
-            tool_results = await self._execute_actions(agent_step.actions)
+            # Cap inter-step gap (almost entirely Claude API think time) on last recorded step
+            t_actions_start = time.monotonic()
+            if t_last_step_end is not None and all_recorded:
+                inter_ms = min(
+                    (t_actions_start - t_last_step_end) * 1000, self._max_inter_step_ms
+                )
+                prev = all_recorded[-1]
+                all_recorded[-1] = RecordedStep(
+                    prev.action_type, prev.params, prev.delay_after_ms + inter_ms
+                )
+
+            tool_results, new_steps = await self._execute_and_record(agent_step.actions)
+            all_recorded.extend(new_steps)
+            t_last_step_end = time.monotonic()
             messages.append({"role": "user", "content": tool_results})
 
         logger.warning("Max steps (%d) exceeded without completing login", self._max_steps)
@@ -220,12 +244,15 @@ class RefreshSessionUseCase:
         logger.info("Session refreshed successfully in %d steps", steps)
         return AgentResult.ok(cookies, steps_taken=steps, messages=redacted)
 
-    async def _execute_actions(self, actions) -> list[dict]:
-        tool_results = []
+    async def _execute_and_record(self, actions) -> tuple[list[dict], list[RecordedStep]]:
+        tool_results: list[dict] = []
+        recorded: list[RecordedStep] = []
         for action_req in actions:
+            t0 = time.monotonic()
             result = await self._dispatcher.dispatch(
                 {**action_req.params, "action": action_req.action_type}
             )
+            t1 = time.monotonic()
             tool_results.append(
                 {
                     "type": "tool_result",
@@ -233,7 +260,19 @@ class RefreshSessionUseCase:
                     "content": result if isinstance(result, list) else str(result),
                 }
             )
-        return tool_results
+            if action_req.action_type != "screenshot":
+                params = self._mask_credentials(action_req.params, action_req.action_type)
+                recorded.append(RecordedStep(action_req.action_type, params, (t1 - t0) * 1000))
+        return tool_results, recorded
+
+    def _mask_credentials(self, params: dict, action_type: str) -> dict:
+        if action_type == "type":
+            text = params.get("text", "")
+            if text == self._login_email:
+                return {**params, "text": "{{email}}"}
+            if text == self._login_password:
+                return {**params, "text": "{{password}}"}
+        return params
 
     @staticmethod
     def _append_screenshot_observation(
