@@ -46,14 +46,26 @@ services:
 
   # Distributed tracing backend — UI at http://localhost:16686
   # Receives traces via OTLP HTTP on port 4318 (internal: jaeger:4318)
+  # Storage: Badger (embedded file-based KV store) — persists across restarts via named volume.
+  # To wipe trace history: docker compose down -v
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
+    environment:
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_VALUE: /badger/data
+      BADGER_DIRECTORY_KEY: /badger/key
+    volumes:
+      - jaeger-data:/badger
     ports:
       - "16686:16686"   # Jaeger UI
       - "4318:4318"     # OTLP HTTP receiver
     networks:
       - cookie-net
+
+volumes:
+  jaeger-data:
 
 networks:
   cookie-net:
