@@ -44,6 +44,17 @@ services:
     networks:
       - cookie-net
 
+  # Distributed tracing backend — UI at http://localhost:16686
+  # Receives traces via OTLP HTTP on port 4318 (internal: jaeger:4318)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP receiver
+    networks:
+      - cookie-net
+
 networks:
   cookie-net:
     driver: bridge
