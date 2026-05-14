@@ -1,4 +1,5 @@
 """Centralised configuration via pydantic-settings (reads .env automatically)."""
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
     action_script_path: str = "/data/action_script.json"
     replay_randomness_pct: float = 0.20
     max_inter_step_ms: float = 3000.0
+
+    # Observability
+    otlp_endpoint: str = "http://jaeger:4318"
+    screenshots_dir: Optional[str] = "/data/screenshots"
 
     # Service
     log_level: str = "INFO"
