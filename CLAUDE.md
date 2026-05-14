@@ -106,6 +106,25 @@ Observe (screenshot) → Think (Claude reasons) → Act (dispatch tool) → Obse
 
 ---
 
+## Running tests
+
+Tests run locally via a `.venv` (Python 3.12) with a `.env.test` file for dummy credentials:
+
+```bash
+env $(cat .env.test | grep -v '^#' | xargs) .venv/bin/pytest
+```
+
+First-time setup (if `.venv` doesn't exist):
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
+
+Expected output: all tests pass, coverage ≥ 80%. The `.venv/` directory is gitignored — do not commit it. `.env.test` is safe to commit (no real credentials).
+
+---
+
 ## What NOT to do
 
 - Do not hardcode credentials anywhere in source files.

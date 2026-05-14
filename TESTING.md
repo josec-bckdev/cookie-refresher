@@ -4,12 +4,35 @@ Testing in cookie-refresher follows **Test-Driven Development (TDD)** with stric
 
 ---
 
+## Local Setup
+
+Tests run against a local `.venv` — the service itself runs in Docker but tests do not.
+
+**One-time setup:**
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
+
+**`.env.test`** contains dummy credentials so `pydantic-settings` can boot without real secrets. It is committed to the repo and safe (no real values):
+
+```bash
+# Run all tests
+env $(cat .env.test | grep -v '^#' | xargs) .venv/bin/pytest
+
+# Run with coverage report
+env $(cat .env.test | grep -v '^#' | xargs) .venv/bin/pytest --cov=src/cookie_refresher --cov-report=term-missing
+```
+
+---
+
 ## Quick Start
 
 Run the full test suite:
 
 ```bash
-pytest tests/
+env $(cat .env.test | grep -v '^#' | xargs) .venv/bin/pytest
 ```
 
 Run with coverage:

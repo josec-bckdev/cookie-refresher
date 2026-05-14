@@ -9,7 +9,7 @@ dist/
 build/
 .eggs/
 
-# Virtual environments
+# Virtual environments (local dev only — not used in Docker)
 .venv/
 venv/
 env/
@@ -24,3 +24,6 @@ htmlcov/
 .vscode/
 *.swp
 *.code-workspace
+
+# Runtime data (atomic write temp files — keep action_script.json itself committable)
+data/*.tmp
