@@ -4,9 +4,9 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from cookie_refresher.domain.entities import AgentResult
+from cookie_refresher.domain.entities import AgentResult, FailureReason
 from cookie_refresher.domain.ports import IJobStore
 
 logger = logging.getLogger(__name__)
@@ -29,21 +29,46 @@ def set_job_store(store: IJobStore) -> None:
 
 
 class RefreshJobResponse(BaseModel):
-    job_id: str
-    status: str
-    steps_taken: Optional[int] = None
-    error: Optional[str] = None
-    messages: Optional[list] = None
+    """Response body for job creation and status polling."""
+
+    job_id: str = Field(description="Unique identifier for this refresh job. Use it to poll /refresh/{job_id}.")
+    status: str = Field(description="Current job state: 'processing' while running, 'success' or 'failed' when done.")
+    mode: Optional[str] = Field(default=None, description="Execution mode: 'agent' (full ReAct loop) or 'replay' (recorded script). Null while processing.")
+    steps_taken: Optional[int] = Field(default=None, description="Number of browser actions executed. Null while processing.")
+    error: Optional[str] = Field(default=None, description="Human-readable failure description. Null on success.")
+    failure_reason: Optional[str] = Field(default=None, description=(
+        "Machine-readable failure code. One of: "
+        "'no_cookies' (agent finished but found no cookies), "
+        "'vtrack_post_failed' (cookies extracted but vtrack rejected them), "
+        "'max_steps_exceeded' (agent hit the step limit without finishing), "
+        "'exception' (unexpected error). Null on success."
+    ))
+    messages: Optional[list] = Field(default=None, description="Redacted Claude conversation transcript. Only present on full agent runs.")
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    summary="Health check",
+    description="Returns 200 while the service is up. Used by Docker and load balancers.",
+)
 async def health():
     return {"status": "ok", "service": "cookie-refresher"}
 
 
-@router.post("/refresh", status_code=202, response_model=RefreshJobResponse)
+@router.post(
+    "/refresh",
+    status_code=202,
+    response_model=RefreshJobResponse,
+    summary="Trigger a session cookie refresh",
+    description=(
+        "Enqueues a cookie refresh job and returns immediately with a `job_id`. "
+        "Poll `GET /refresh/{job_id}` to check the outcome. "
+        "The job runs in the background: in **replay** mode if a recorded script exists "
+        "(fast, ~25s, one Claude API call), or in full **agent** mode otherwise (~2min, ~30 Claude API calls)."
+    ),
+    response_description="Job accepted. Poll the returned job_id for the result.",
+)
 async def trigger_refresh(background_tasks: BackgroundTasks):
-    """Enqueue a session-cookie refresh. Returns immediately with a job_id to poll."""
     if _use_case_factory is None or _job_store is None:
         raise HTTPException(status_code=503, detail="Service not initialised")
 
@@ -52,9 +77,18 @@ async def trigger_refresh(background_tasks: BackgroundTasks):
     return RefreshJobResponse(job_id=job.id, status=job.status.value)
 
 
-@router.get("/refresh/{job_id}", response_model=RefreshJobResponse)
+@router.get(
+    "/refresh/{job_id}",
+    response_model=RefreshJobResponse,
+    summary="Poll a refresh job",
+    description=(
+        "Returns the current state of a previously enqueued refresh job. "
+        "Keep polling until `status` is `'success'` or `'failed'`. "
+        "On failure, inspect `failure_reason` for a machine-readable code and `error` for a human-readable description."
+    ),
+    response_description="Current job state. Re-poll if status is 'processing'.",
+)
 async def get_refresh_status(job_id: str):
-    """Poll the outcome of a previously enqueued refresh job."""
     if _job_store is None:
         raise HTTPException(status_code=503, detail="Service not initialised")
 
@@ -65,8 +99,10 @@ async def get_refresh_status(job_id: str):
     return RefreshJobResponse(
         job_id=job.id,
         status=job.status.value,
+        mode=job.mode,
         steps_taken=job.steps_taken,
         error=job.error,
+        failure_reason=job.failure_reason,
         messages=job.messages or None,
     )
 
@@ -80,7 +116,7 @@ async def _run_refresh(use_case_factory, job_store: IJobStore, job_id: str) -> N
         result: AgentResult = await use_case.execute()
     except Exception as exc:
         logger.exception("Unhandled error in refresh job %s", job_id)
-        result = AgentResult.fail(str(exc), steps_taken=0)
+        result = AgentResult.fail(str(exc), steps_taken=0, failure_reason=FailureReason.EXCEPTION)
     if not result.success:
         logger.warning("Refresh job %s failed: %s", job_id, result.error)
     await job_store.update(job_id, result)

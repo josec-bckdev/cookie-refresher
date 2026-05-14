@@ -23,4 +23,6 @@ class InMemoryJobStore(IJobStore):
         job.status = JobStatus.SUCCESS if result.success else JobStatus.FAILED
         job.steps_taken = result.steps_taken
         job.error = result.error
+        job.mode = result.mode
+        job.failure_reason = result.failure_reason
         job.messages = result.messages

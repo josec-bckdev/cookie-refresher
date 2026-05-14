@@ -23,7 +23,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from cookie_refresher.domain.entities import ActionScript, AgentResult, RecordedStep, SessionCookies
+from cookie_refresher.domain.entities import ActionScript, AgentResult, FailureReason, RecordedStep, RunMode, SessionCookies
 from cookie_refresher.domain.ports import IBrowserGateway, IVtrackGateway, IAgentClient, IActionScriptStore
 
 logger = logging.getLogger(__name__)
@@ -216,6 +216,8 @@ class RefreshSessionUseCase:
         return AgentResult.fail(
             f"Max steps ({self._max_steps}) exceeded without extracting cookies",
             steps_taken=step,
+            mode=RunMode.AGENT,
+            failure_reason=FailureReason.MAX_STEPS_EXCEEDED,
             messages=self._redact(messages, self._login_email, self._login_password),
         )
 
@@ -228,6 +230,8 @@ class RefreshSessionUseCase:
             return AgentResult.fail(
                 "Agent signalled done but provided no cookies",
                 steps_taken=steps,
+                mode=RunMode.AGENT,
+                failure_reason=FailureReason.NO_COOKIES,
                 messages=redacted,
             )
 
@@ -238,11 +242,13 @@ class RefreshSessionUseCase:
             return AgentResult.fail(
                 "Cookies extracted but vtrack rejected the POST request",
                 steps_taken=steps,
+                mode=RunMode.AGENT,
+                failure_reason=FailureReason.VTRACK_POST_FAILED,
                 messages=redacted,
             )
 
         logger.info("Session refreshed successfully in %d steps", steps)
-        return AgentResult.ok(cookies, steps_taken=steps, messages=redacted)
+        return AgentResult.ok(cookies, steps_taken=steps, mode=RunMode.AGENT, messages=redacted)
 
     async def _execute_and_record(self, actions) -> tuple[list[dict], list[RecordedStep]]:
         tool_results: list[dict] = []

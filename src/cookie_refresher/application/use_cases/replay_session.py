@@ -7,7 +7,7 @@ import logging
 import random
 from typing import Optional
 
-from cookie_refresher.domain.entities import ActionScript, AgentResult, RecordedStep, SessionCookies
+from cookie_refresher.domain.entities import ActionScript, AgentResult, FailureReason, RunMode, SessionCookies
 from cookie_refresher.domain.ports import IBrowserGateway, IVtrackGateway, IAgentClient, IActionScriptStore
 from cookie_refresher.application.use_cases.refresh_session import ActionDispatcher
 
@@ -80,18 +80,26 @@ class ReplaySessionUseCase:
 
     async def _finalise(self, cookies: Optional[SessionCookies], steps: int) -> AgentResult:
         if cookies is None:
-            return AgentResult.fail("Agent signalled done but provided no cookies", steps_taken=steps)
+            return AgentResult.fail(
+                "Agent signalled done but provided no cookies",
+                steps_taken=steps,
+                mode=RunMode.REPLAY,
+                failure_reason=FailureReason.NO_COOKIES,
+            )
 
         logger.info("Cookies extracted — posting to vtrack")
         posted = await self._vtrack.post_cookies(cookies)
 
         if not posted:
             return AgentResult.fail(
-                "Cookies extracted but vtrack rejected the POST request", steps_taken=steps
+                "Cookies extracted but vtrack rejected the POST request",
+                steps_taken=steps,
+                mode=RunMode.REPLAY,
+                failure_reason=FailureReason.VTRACK_POST_FAILED,
             )
 
         logger.info("Session replayed successfully in %d steps", steps)
-        return AgentResult.ok(cookies, steps_taken=steps)
+        return AgentResult.ok(cookies, steps_taken=steps, mode=RunMode.REPLAY)
 
     def _resolve_credentials(self, params: dict, action_type: str) -> dict:
         if action_type == "type":
