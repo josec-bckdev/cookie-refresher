@@ -175,3 +175,56 @@ class TestAnthropicClientSpan:
         agent, exporter = _make_agent(response=_make_mock_response(content=[block], stop_reason="tool_use"))
         await agent.complete([])
         assert exporter.get_finished_spans()[0].attributes["agent.action_count"] == 1
+
+    async def test_thinking_block_adds_reasoning_event(self):
+        block = MagicMock()
+        block.type = "thinking"
+        block.thinking = "I see the login form and will click the email field."
+        agent, exporter = _make_agent(response=_make_mock_response(content=[block]))
+        await agent.complete([])
+        events = exporter.get_finished_spans()[0].events
+        reasoning = [e for e in events if e.name == "agent.reasoning"]
+        assert len(reasoning) == 1
+        assert "login form" in reasoning[0].attributes["text"]
+
+    async def test_text_block_adds_reasoning_event(self):
+        block = MagicMock()
+        block.type = "text"
+        block.text = "I will click the login button now."
+        agent, exporter = _make_agent(response=_make_mock_response(content=[block]))
+        await agent.complete([])
+        events = exporter.get_finished_spans()[0].events
+        reasoning = [e for e in events if e.name == "agent.reasoning"]
+        assert len(reasoning) == 1
+        assert "login button" in reasoning[0].attributes["text"]
+
+    async def test_tool_use_block_adds_action_event(self):
+        block = MagicMock()
+        block.type = "tool_use"
+        block.name = "computer"
+        block.id = "tool_1"
+        block.input = {"action": "left_click", "coordinate": [100, 200]}
+        agent, exporter = _make_agent(response=_make_mock_response(content=[block], stop_reason="tool_use"))
+        await agent.complete([])
+        events = exporter.get_finished_spans()[0].events
+        actions = [e for e in events if e.name == "agent.action"]
+        assert len(actions) == 1
+        assert actions[0].attributes["action_type"] == "left_click"
+        assert "coordinate" in actions[0].attributes["params"]
+
+    async def test_multiple_blocks_produce_ordered_events(self):
+        thinking = MagicMock()
+        thinking.type = "thinking"
+        thinking.thinking = "I need to click the checkbox."
+        action = MagicMock()
+        action.type = "tool_use"
+        action.name = "computer"
+        action.id = "tool_2"
+        action.input = {"action": "left_click", "coordinate": [640, 400]}
+        agent, exporter = _make_agent(
+            response=_make_mock_response(content=[thinking, action], stop_reason="tool_use")
+        )
+        await agent.complete([])
+        events = exporter.get_finished_spans()[0].events
+        assert events[0].name == "agent.reasoning"
+        assert events[1].name == "agent.action"
