@@ -59,6 +59,29 @@ fix(adapters): handle vtrack 422 response gracefully
 
 ---
 
+## Atomic commits with TDD
+
+Every commit must be atomic — one logical change, passing tests, minimal and self-contained. Use this rhythm:
+
+1. **Write failing tests** (RED) → commit with `test(scope): ...`
+2. **Implement minimum code to pass** (GREEN) → commit with `feat(scope): ...` or `fix(scope): ...`
+3. **Refactor** (REFACTOR) → commit with `refactor(scope): ...` (only if needed)
+
+**Multi-layer changes:** When a feature spans multiple layers (domain → application → adapters), create separate commits per layer, grouping tests + implementation:
+- Commit 1: `test(domain): add failing tests for X`
+- Commit 2: `feat(domain): implement X`
+- Commit 3: `test(adapters): add failing tests for Y` (depends on X)
+- Commit 4: `feat(adapters): integrate X in adapter layer`
+
+Each commit must:
+- Pass all tests
+- Be independently understandable (read the commit message and you know what changed and why)
+- Have a scope narrower than "multiple unrelated things"
+
+Never squash tests and implementation into one commit — the test commit is your red state proof, the impl is the green.
+
+---
+
 ## Agentic pattern
 
 This service uses **ReAct (Reason + Act)**. Each loop iteration:
