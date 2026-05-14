@@ -1,4 +1,5 @@
 """FastAPI controller — health check + manual trigger + status endpoints."""
+import inspect
 import logging
 from typing import Optional
 
@@ -71,7 +72,10 @@ async def get_refresh_status(job_id: str):
 
 
 async def _run_refresh(use_case_factory, job_store: IJobStore, job_id: str) -> None:
-    use_case = use_case_factory()
+    if inspect.iscoroutinefunction(use_case_factory):
+        use_case = await use_case_factory()
+    else:
+        use_case = use_case_factory()
     try:
         result: AgentResult = await use_case.execute()
     except Exception as exc:

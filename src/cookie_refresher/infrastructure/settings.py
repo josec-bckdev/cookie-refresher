@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     schedule_afternoon: str = "0 15 * * 1-5"  # 3:00 PM
     timezone: str = "America/Bogota"
 
+    # Action script recording / replay
+    action_script_path: str = "/data/action_script.json"
+    replay_randomness_pct: float = 0.20
+    max_inter_step_ms: float = 3000.0
+
     # Service
     log_level: str = "INFO"
 

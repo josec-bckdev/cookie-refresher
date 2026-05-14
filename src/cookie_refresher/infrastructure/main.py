@@ -6,8 +6,10 @@ Dependency graph (outer → inner, each only imports from its own layer or inwar
     → adapters/controllers/api.py         (FastAPI routes)
     → adapters/gateways/vnc_browser.py    (IBrowserGateway impl)
     → adapters/gateways/vtrack_http.py    (IVtrackGateway impl)
+    → adapters/action_script_store.py     (IActionScriptStore impl)
     → infrastructure/anthropic_client.py  (IAgentClient impl)
-    → application/use_cases/refresh_session.py (use case)
+    → application/use_cases/refresh_session.py (full ReAct use case)
+    → application/use_cases/replay_session.py  (fast replay use case)
     → infrastructure/scheduler.py         (cron)
     → infrastructure/settings.py          (config)
 """
@@ -17,11 +19,13 @@ from contextlib import asynccontextmanager
 import anthropic
 from fastapi import FastAPI
 
+from cookie_refresher.adapters.action_script_store import FileActionScriptStore
 from cookie_refresher.adapters.controllers.api import router, set_job_store, set_use_case_factory
 from cookie_refresher.adapters.job_store import InMemoryJobStore
 from cookie_refresher.adapters.gateways.vnc_browser import VncBrowserGateway
 from cookie_refresher.adapters.gateways.vtrack_http import VtrackHttpGateway
 from cookie_refresher.application.use_cases.refresh_session import RefreshSessionUseCase
+from cookie_refresher.application.use_cases.replay_session import ReplaySessionUseCase
 from cookie_refresher.infrastructure.anthropic_client import AnthropicAgentClient
 from cookie_refresher.infrastructure.scheduler import build_scheduler
 from cookie_refresher.infrastructure.settings import settings
@@ -32,18 +36,53 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_script_store = FileActionScriptStore(settings.action_script_path)
 
-def _build_use_case() -> RefreshSessionUseCase:
+
+def _make_agent() -> AnthropicAgentClient:
+    return AnthropicAgentClient(
+        client=anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key),
+        model=settings.anthropic_model,
+    )
+
+
+def _make_browser() -> VncBrowserGateway:
+    return VncBrowserGateway(settings.vnc_browser_url, settings.vnc_container_name)
+
+
+def _make_vtrack() -> VtrackHttpGateway:
+    return VtrackHttpGateway(settings.vtrack_api_url)
+
+
+async def _build_use_case():
+    script = await _script_store.load()
+    if script:
+        logger.info(
+            "Replay mode selected — script has %d steps, used %d times",
+            len(script.steps),
+            script.use_count,
+        )
+        return ReplaySessionUseCase(
+            browser=_make_browser(),
+            vtrack=_make_vtrack(),
+            agent=_make_agent(),
+            script=script,
+            login_url=settings.vtrack_login_url if hasattr(settings, "vtrack_login_url") else "https://www.rutasljrj.net/rastreo/ljrj/login",
+            login_email=settings.login_email,
+            login_password=settings.login_password,
+            randomness_pct=settings.replay_randomness_pct,
+            script_store=_script_store,
+        )
+    logger.info("No action script found — running full ReAct loop (will record on success)")
     return RefreshSessionUseCase(
-        browser=VncBrowserGateway(settings.vnc_browser_url, settings.vnc_container_name),
-        vtrack=VtrackHttpGateway(settings.vtrack_api_url),
-        agent=AnthropicAgentClient(
-            client=anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key),
-            model=settings.anthropic_model,
-        ),
+        browser=_make_browser(),
+        vtrack=_make_vtrack(),
+        agent=_make_agent(),
         login_email=settings.login_email,
         login_password=settings.login_password,
         max_steps=settings.agent_max_steps,
+        script_store=_script_store,
+        max_inter_step_ms=settings.max_inter_step_ms,
     )
 
 
@@ -55,7 +94,7 @@ async def lifespan(app: FastAPI):
     set_job_store(InMemoryJobStore())
 
     async def _run_scheduled_refresh() -> None:
-        use_case = _build_use_case()
+        use_case = await _build_use_case()
         result = await use_case.execute()
         if result.success:
             logger.info("Scheduled refresh succeeded in %d steps", result.steps_taken)
