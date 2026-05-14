@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     login_password: str
 
     # Scheduler (Mon–Fri, America/Bogota timezone)
-    schedule_morning: str = "0 6 * * 1-5"    # 6:00 AM
+    schedule_morning: str = "45 5 * * 1-5"    # 5:45 AM
     schedule_afternoon: str = "0 15 * * 1-5"  # 3:00 PM
     timezone: str = "America/Bogota"
 
