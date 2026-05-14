@@ -206,3 +206,36 @@ class TestReplaySessionUseCase:
 
         assert len(sleep_calls) == len(SCRIPT.steps)
         assert all(s >= 0 for s in sleep_calls)
+
+    async def test_takes_screenshot_after_each_step(self):
+        """One screenshot per step (for flow debugging) plus one final for cookie extraction."""
+        browser = _make_browser()
+        use_case = _make_use_case(browser=browser)
+
+        with patch("asyncio.sleep"):
+            await use_case.execute()
+
+        assert browser.take_screenshot.await_count == len(SCRIPT.steps) + 1
+
+    async def test_step_screenshot_taken_after_sleep(self):
+        """Screenshots capture state after the action has had time to settle."""
+        call_order = []
+
+        async def record_screenshot():
+            call_order.append("screenshot")
+            return FAKE_PNG
+
+        async def record_sleep(_):
+            call_order.append("sleep")
+
+        browser = _make_browser()
+        browser.take_screenshot.side_effect = record_screenshot
+        use_case = _make_use_case(browser=browser)
+
+        with patch("asyncio.sleep", side_effect=record_sleep):
+            await use_case.execute()
+
+        # For each script step: sleep then screenshot
+        for i in range(len(SCRIPT.steps)):
+            assert call_order[i * 2] == "sleep", f"step {i}: expected sleep first"
+            assert call_order[i * 2 + 1] == "screenshot", f"step {i}: expected screenshot after sleep"
