@@ -1,7 +1,10 @@
 """RED: domain entity invariants — run before any implementation exists."""
 import pytest
 from datetime import datetime
-from cookie_refresher.domain.entities import SessionCookies, AgentResult, Job, JobStatus, RecordedStep, ActionScript
+from cookie_refresher.domain.entities import (
+    SessionCookies, AgentResult, Job, JobStatus,
+    RecordedStep, ActionScript, RunMode, FailureReason,
+)
 
 
 class TestSessionCookies:
@@ -80,6 +83,48 @@ class TestAgentResult:
         result = AgentResult.ok(cookies, steps_taken=1)
         assert result.messages == []
 
+    def test_ok_accepts_mode(self):
+        cookies = SessionCookies(cf_clearance="abc", ci_session="xyz")
+        result = AgentResult.ok(cookies, steps_taken=5, mode=RunMode.AGENT)
+        assert result.mode == RunMode.AGENT
+
+    def test_ok_mode_defaults_to_none(self):
+        cookies = SessionCookies(cf_clearance="abc", ci_session="xyz")
+        result = AgentResult.ok(cookies, steps_taken=1)
+        assert result.mode is None
+
+    def test_ok_failure_reason_is_always_none(self):
+        cookies = SessionCookies(cf_clearance="abc", ci_session="xyz")
+        result = AgentResult.ok(cookies, steps_taken=1, mode=RunMode.REPLAY)
+        assert result.failure_reason is None
+
+    def test_fail_accepts_mode_and_failure_reason(self):
+        result = AgentResult.fail(
+            "no cookies", steps_taken=3,
+            mode=RunMode.REPLAY, failure_reason=FailureReason.NO_COOKIES,
+        )
+        assert result.mode == RunMode.REPLAY
+        assert result.failure_reason == FailureReason.NO_COOKIES
+
+    def test_fail_mode_and_failure_reason_default_to_none(self):
+        result = AgentResult.fail("boom", steps_taken=1)
+        assert result.mode is None
+        assert result.failure_reason is None
+
+
+class TestRunMode:
+    def test_values(self):
+        assert RunMode.AGENT == "agent"
+        assert RunMode.REPLAY == "replay"
+
+
+class TestFailureReason:
+    def test_values(self):
+        assert FailureReason.NO_COOKIES == "no_cookies"
+        assert FailureReason.VTRACK_POST_FAILED == "vtrack_post_failed"
+        assert FailureReason.MAX_STEPS_EXCEEDED == "max_steps_exceeded"
+        assert FailureReason.EXCEPTION == "exception"
+
 
 class TestJob:
     def test_new_job_has_processing_status(self):
@@ -88,6 +133,8 @@ class TestJob:
         assert job.id == "abc-123"
         assert job.steps_taken is None
         assert job.error is None
+        assert job.mode is None
+        assert job.failure_reason is None
         assert job.messages == []
 
     def test_job_status_values(self):
