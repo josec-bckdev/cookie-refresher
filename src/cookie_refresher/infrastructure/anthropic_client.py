@@ -130,19 +130,28 @@ class AnthropicAgentClient(IAgentClient):
 
             for block in response.content:
                 if block.type == "thinking":
-                    reasoning_parts.append(block.thinking or "")
+                    text = block.thinking or ""
+                    reasoning_parts.append(text)
+                    span.add_event("agent.reasoning", {"text": text[:1000]})
                 elif block.type == "text":
                     reasoning_parts.append(block.text)
+                    span.add_event("agent.reasoning", {"text": block.text[:1000]})
                     cookies = self._try_parse_cookies(block.text)
                 elif block.type == "tool_use" and block.name == "computer":
                     input_data = block.input or {}
+                    action_type = str(input_data.get("action", "unknown"))
+                    params = {k: v for k, v in input_data.items() if k != "action"}
                     actions.append(
                         ActionRequest(
-                            action_type=input_data.get("action", "unknown"),
-                            params={k: v for k, v in input_data.items() if k != "action"},
+                            action_type=action_type,
+                            params=params,
                             tool_use_id=block.id,
                         )
                     )
+                    span.add_event("agent.action", {
+                        "action_type": action_type,
+                        "params": json.dumps(params),
+                    })
 
             is_done = bool(cookies) or (response.stop_reason == "end_turn" and not actions)
             span.set_attribute("agent.is_done", is_done)
