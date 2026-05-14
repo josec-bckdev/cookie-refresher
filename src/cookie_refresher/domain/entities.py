@@ -1,6 +1,7 @@
 """Pure domain entities — no framework imports, no I/O."""
 from __future__ import annotations
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 
@@ -72,3 +73,19 @@ class AgentResult:
         if not error:
             raise ValueError("error message required for a failure result")
         return cls(success=False, cookies=None, error=error, steps_taken=steps_taken, messages=messages or [])
+
+
+@dataclass(frozen=True)
+class RecordedStep:
+    """One recorded browser action with its wall-clock dispatch time."""
+    action_type: str
+    params: dict
+    delay_after_ms: float
+
+
+@dataclass
+class ActionScript:
+    """A recorded sequence of browser actions from a successful run."""
+    steps: list[RecordedStep]
+    recorded_at: datetime
+    use_count: int = 0
