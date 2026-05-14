@@ -20,6 +20,8 @@ from typing import Optional
 
 import anthropic
 from anthropic.resources.beta.messages.messages import AsyncMessages as _AsyncBetaMessages
+from opentelemetry import trace
+from opentelemetry.trace import Tracer
 
 from cookie_refresher.domain.entities import (
     ActionRequest,
@@ -62,12 +64,14 @@ class AnthropicAgentClient(IAgentClient):
         client: Optional[anthropic.AsyncAnthropic] = None,
         model: str = "claude-opus-4-7",
         max_tokens: int = 4096,
+        tracer: Optional[Tracer] = None,
     ) -> None:
         _client = client or anthropic.AsyncAnthropic()
         # Resolve the cached_property once so static analysers see the concrete type.
         self._beta_messages: _AsyncBetaMessages = _client.beta.messages
         self._model = model
         self._max_tokens = max_tokens
+        self._tracer = tracer or trace.get_tracer(__name__)
 
     @staticmethod
     def _prune_old_screenshots(messages: list[dict]) -> None:
@@ -94,57 +98,62 @@ class AnthropicAgentClient(IAgentClient):
 
     async def complete(self, messages: list[dict]) -> AgentStep:
         self._prune_old_screenshots(messages)
-        response = await self._beta_messages.create(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            system=_SYSTEM_PROMPT,
-            tools=[_COMPUTER_TOOL],
-            messages=messages,
-            thinking={"type": "adaptive"},
-            betas=["computer-use-2025-11-24"],
-        )
+        with self._tracer.start_as_current_span("agent.claude_call") as span:
+            span.set_attribute("model", self._model)
+            response = await self._beta_messages.create(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=_SYSTEM_PROMPT,
+                tools=[_COMPUTER_TOOL],
+                messages=messages,
+                thinking={"type": "adaptive"},
+                betas=["computer-use-2025-11-24"],
+            )
 
-        u = response.usage
-        logger.info(
-            "Agent API usage — input: %d, output: %d, cache_read: %d, cache_write: %d",
-            u.input_tokens,
-            u.output_tokens,
-            getattr(u, "cache_read_input_tokens", 0) or 0,
-            getattr(u, "cache_creation_input_tokens", 0) or 0,
-        )
-        logger.debug("Anthropic response — stop_reason=%s blocks=%d", response.stop_reason, len(response.content))
+            u = response.usage
+            cache_read = getattr(u, "cache_read_input_tokens", 0) or 0
+            cache_write = getattr(u, "cache_creation_input_tokens", 0) or 0
+            span.set_attribute("llm.input_tokens", u.input_tokens)
+            span.set_attribute("llm.output_tokens", u.output_tokens)
+            span.set_attribute("llm.cache_read_tokens", cache_read)
+            span.set_attribute("llm.cache_write_tokens", cache_write)
 
-        actions: list[ActionRequest] = []
-        cookies: Optional[SessionCookies] = None
-        reasoning_parts: list[str] = []
+            logger.info(
+                "Agent API usage — input: %d, output: %d, cache_read: %d, cache_write: %d",
+                u.input_tokens, u.output_tokens, cache_read, cache_write,
+            )
+            logger.debug("Anthropic response — stop_reason=%s blocks=%d", response.stop_reason, len(response.content))
 
-        for block in response.content:
-            if block.type == "thinking":
-                reasoning_parts.append(block.thinking or "")
+            actions: list[ActionRequest] = []
+            cookies: Optional[SessionCookies] = None
+            reasoning_parts: list[str] = []
 
-            elif block.type == "text":
-                reasoning_parts.append(block.text)
-                cookies = self._try_parse_cookies(block.text)
-
-            elif block.type == "tool_use" and block.name == "computer":
-                input_data = block.input or {}
-                actions.append(
-                    ActionRequest(
-                        action_type=input_data.get("action", "unknown"),
-                        params={k: v for k, v in input_data.items() if k != "action"},
-                        tool_use_id=block.id,
+            for block in response.content:
+                if block.type == "thinking":
+                    reasoning_parts.append(block.thinking or "")
+                elif block.type == "text":
+                    reasoning_parts.append(block.text)
+                    cookies = self._try_parse_cookies(block.text)
+                elif block.type == "tool_use" and block.name == "computer":
+                    input_data = block.input or {}
+                    actions.append(
+                        ActionRequest(
+                            action_type=input_data.get("action", "unknown"),
+                            params={k: v for k, v in input_data.items() if k != "action"},
+                            tool_use_id=block.id,
+                        )
                     )
-                )
 
-        # Done if cookies were extracted, OR if the model finished without requesting actions.
-        is_done = bool(cookies) or (response.stop_reason == "end_turn" and not actions)
+            is_done = bool(cookies) or (response.stop_reason == "end_turn" and not actions)
+            span.set_attribute("agent.is_done", is_done)
+            span.set_attribute("agent.action_count", len(actions))
 
-        return AgentStep(
-            actions=actions,
-            is_done=is_done,
-            cookies=cookies,
-            reasoning=" | ".join(filter(None, reasoning_parts))[:500],
-        )
+            return AgentStep(
+                actions=actions,
+                is_done=is_done,
+                cookies=cookies,
+                reasoning=" | ".join(filter(None, reasoning_parts))[:500],
+            )
 
     @staticmethod
     def _try_parse_cookies(text: str) -> Optional[SessionCookies]:

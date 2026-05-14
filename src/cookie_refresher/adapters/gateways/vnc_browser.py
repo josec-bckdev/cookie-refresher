@@ -20,9 +20,14 @@ Expected VNC container endpoints:
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
 import httpx
 import docker  # type: ignore
 import docker.errors  # type: ignore
+from opentelemetry import trace
 
 from cookie_refresher.domain.ports import IBrowserGateway
 
@@ -33,10 +38,11 @@ _HEALTH_TIMEOUT = 60.0
 
 
 class VncBrowserGateway(IBrowserGateway):
-    def __init__(self, base_url: str, container_name: str, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, container_name: str, timeout: float = 30.0, screenshots_dir: Optional[str] = None) -> None:
         self._base_url = base_url.rstrip("/")
         self._container_name = container_name
         self._timeout = timeout
+        self._screenshots_dir = screenshots_dir
         self._client: httpx.AsyncClient | None = None
         self._docker = docker.from_env()
 
@@ -125,7 +131,19 @@ class VncBrowserGateway(IBrowserGateway):
         response.raise_for_status()
         if not response.content:
             raise RuntimeError("VNC browser returned an empty screenshot")
-        return response.content
+        data = response.content
+        if self._screenshots_dir:
+            path = self._save_screenshot(data)
+            trace.get_current_span().set_attribute("screenshot.path", path)
+        return data
+
+    def _save_screenshot(self, data: bytes) -> str:
+        dir_path = Path(self._screenshots_dir)  # type: ignore[arg-type]
+        dir_path.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        path = dir_path / f"{ts}.png"
+        path.write_bytes(data)
+        return str(path)
 
     async def click(self, x: int, y: int) -> None:
         logger.debug("Browser left_click (%d, %d)", x, y)
