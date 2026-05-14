@@ -49,7 +49,7 @@ services:
   # Jaeger v2 with Badger storage — persists across restarts via named volume.
   # To wipe trace history: docker compose down -v
   jaeger:
-    image: jaegertracing/jaeger:2
+    image: jaegertracing/jaeger:latest
     container_name: jaeger
     user: root
     command: ["--config", "/etc/jaeger/config.yaml"]
