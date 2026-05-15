@@ -15,6 +15,7 @@ class JobStatus(str, Enum):
 class RunMode(str, Enum):
     AGENT = "agent"
     REPLAY = "replay"
+    PROGRAMMED = "programmed"
 
 
 class FailureReason(str, Enum):
@@ -120,3 +121,17 @@ class ActionScript:
     steps: list[RecordedStep]
     recorded_at: datetime
     use_count: int = 0
+
+
+@dataclass(frozen=True)
+class ProgrammedStep:
+    """One human-authored browser action with an optional post-action delay."""
+    action_type: str
+    params: dict
+    delay_after_ms: float = 0.0
+
+
+@dataclass(frozen=True)
+class ProgrammedScript:
+    """Human-authored sequence of browser actions for zero-AI cookie refresh."""
+    steps: list[ProgrammedStep]
