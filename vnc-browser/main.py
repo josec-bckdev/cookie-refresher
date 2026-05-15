@@ -5,13 +5,15 @@ Every endpoint is a thin shell command. No WebDriver, no CDP.
 Cloudflare sees a plain desktop browser — because it is one.
 """
 import asyncio
+import json as _json
 import os
 import subprocess
-import tempfile
 import time
 import logging
+import urllib.request
 from pathlib import Path
 
+import websockets
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
 
@@ -56,6 +58,7 @@ async def _launch_browser() -> None:
             "--disable-dev-shm-usage",
             "--disable-software-rasterizer",
             "--window-size=1280,900",
+            "--remote-debugging-port=9222",
             "about:blank",
         ],
         env=_ENV,
@@ -237,3 +240,45 @@ async def scroll(body: _Scroll):
         _sh(["xdotool", "click", button])
         await asyncio.sleep(0.05)
     return {"ok": True}
+
+
+@app.get("/cookies")
+async def get_cookies(names: str = "cf_clearance,ci_session"):
+    """Read named cookies from Chromium's cookie jar via CDP."""
+    name_list = [n.strip() for n in names.split(",") if n.strip()]
+
+    # Discover the first page target's CDP WebSocket URL
+    try:
+        with urllib.request.urlopen("http://localhost:9222/json", timeout=5) as resp:
+            targets = _json.loads(resp.read())
+    except Exception as exc:
+        logger.error("CDP unreachable: %s", exc)
+        return Response(status_code=503, content=f"CDP unavailable: {exc}".encode())
+
+    page = next((t for t in targets if t.get("type") == "page"), None)
+    if not page:
+        logger.error("No page target found in CDP")
+        return Response(status_code=503, content=b"No page target found")
+
+    ws_url = page["webSocketDebuggerUrl"]
+    logger.debug("CDP target: %s", ws_url)
+
+    # Fetch all cookies from the page context
+    try:
+        async with websockets.connect(ws_url) as ws:
+            await ws.send(_json.dumps({"id": 1, "method": "Network.getAllCookies"}))
+            raw = await ws.recv()
+    except Exception as exc:
+        logger.error("CDP WebSocket error: %s", exc)
+        return Response(status_code=503, content=f"CDP error: {exc}".encode())
+
+    result = _json.loads(raw)
+    all_cookies = {c["name"]: c["value"] for c in result["result"]["cookies"]}
+
+    missing = [n for n in name_list if n not in all_cookies]
+    if missing:
+        logger.warning("Cookies not found: %s", missing)
+        return Response(status_code=404, content=f"Missing cookies: {missing}".encode())
+
+    logger.info("Returning cookies: %s", name_list)
+    return {name: all_cookies[name] for name in name_list}

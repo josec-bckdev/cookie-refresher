@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir fastapi "uvicorn[standard]" pydantic
+RUN pip3 install --no-cache-dir fastapi "uvicorn[standard]" pydantic websockets
 
 # Preferences are reset at container start (in CMD), not here — so every run
 # begins from a clean state even if Chromium mutated them during the last session.
