@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # Action script recording / replay
     action_script_path: str = "/data/action_script.json"
+    programmed_script_path: str = "/data/programmed_steps.json"
     replay_randomness_pct: float = 0.20
     max_inter_step_ms: float = 3000.0
 
