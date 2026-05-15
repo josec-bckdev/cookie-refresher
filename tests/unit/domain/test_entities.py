@@ -4,6 +4,7 @@ from datetime import datetime
 from cookie_refresher.domain.entities import (
     SessionCookies, AgentResult, Job, JobStatus,
     RecordedStep, ActionScript, RunMode, FailureReason,
+    ProgrammedStep, ProgrammedScript,
 )
 
 
@@ -216,3 +217,60 @@ class TestActionScript:
         assert script.steps[0] == s1
         assert script.steps[1] == s2
         assert script.steps[2] == s3
+
+
+class TestRunModeProgrammed:
+    def test_programmed_value(self):
+        assert RunMode.PROGRAMMED == "programmed"
+
+
+class TestProgrammedStep:
+    def test_valid_creation_with_delay(self):
+        step = ProgrammedStep("left_click", {"coordinate": [100, 200]}, delay_after_ms=500.0)
+        assert step.action_type == "left_click"
+        assert step.params == {"coordinate": [100, 200]}
+        assert step.delay_after_ms == 500.0
+
+    def test_delay_defaults_to_zero(self):
+        step = ProgrammedStep("get_cookies", {"names": ["cf_clearance"]})
+        assert step.delay_after_ms == 0.0
+
+    def test_is_immutable(self):
+        step = ProgrammedStep("type", {"text": "hello"})
+        with pytest.raises((AttributeError, TypeError)):
+            step.action_type = "other"  # type: ignore[misc]
+
+    def test_equality_by_value(self):
+        a = ProgrammedStep("left_click", {"coordinate": [1, 2]}, 100.0)
+        b = ProgrammedStep("left_click", {"coordinate": [1, 2]}, 100.0)
+        assert a == b
+
+    def test_inequality_when_params_differ(self):
+        a = ProgrammedStep("left_click", {"coordinate": [1, 2]})
+        b = ProgrammedStep("left_click", {"coordinate": [9, 9]})
+        assert a != b
+
+
+class TestProgrammedScript:
+    def test_valid_creation(self):
+        steps = [ProgrammedStep("left_click", {"coordinate": [1, 2]})]
+        script = ProgrammedScript(steps=steps)
+        assert script.steps == steps
+
+    def test_is_immutable(self):
+        script = ProgrammedScript(steps=[])
+        with pytest.raises((AttributeError, TypeError)):
+            script.steps = []  # type: ignore[misc]
+
+    def test_steps_preserve_order(self):
+        s1 = ProgrammedStep("left_click", {"coordinate": [1, 2]})
+        s2 = ProgrammedStep("type", {"text": "{{password}}"})
+        s3 = ProgrammedStep("get_cookies", {"names": ["cf_clearance", "ci_session"]})
+        script = ProgrammedScript(steps=[s1, s2, s3])
+        assert script.steps[0] == s1
+        assert script.steps[1] == s2
+        assert script.steps[2] == s3
+
+    def test_empty_steps_allowed(self):
+        script = ProgrammedScript(steps=[])
+        assert script.steps == []
