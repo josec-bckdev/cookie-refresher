@@ -17,6 +17,7 @@ Expected VNC container endpoints:
   POST /keyboard/key        → {"key": str}
   POST /navigate            → {"url": str, "wait_seconds": float}
   POST /scroll              → {"x": int, "y": int, "direction": str, "amount": int}
+  GET  /cookies             → {"cf_clearance": str, "ci_session": str}
 """
 import asyncio
 import logging
@@ -183,4 +184,12 @@ class VncBrowserGateway(IBrowserGateway):
         )
 
     async def get_cookies(self, names: list[str]) -> "SessionCookies":
-        raise NotImplementedError("get_cookies not yet implemented")
+        from cookie_refresher.domain.entities import SessionCookies
+        logger.debug("Browser get_cookies: %s", names)
+        response = await self._http().get("/cookies", params={"names": ",".join(names)})
+        response.raise_for_status()
+        data = response.json()
+        return SessionCookies(
+            cf_clearance=data["cf_clearance"],
+            ci_session=data["ci_session"],
+        )
