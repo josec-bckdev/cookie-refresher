@@ -25,5 +25,7 @@ htmlcov/
 *.swp
 *.code-workspace
 
-# Runtime data (atomic write temp files — keep action_script.json itself committable)
-data/*.tmp
+# Runtime data — ignore screenshots, keep JSON files
+data/screenshots/
+data/*.json.tmp
+
