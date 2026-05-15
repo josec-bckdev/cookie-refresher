@@ -1,19 +1,142 @@
 {
   "steps": [
-    {"action_type": "left_click", "params": {"coordinate": [642, 470]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [538, 535]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [642, 371]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [681, 419]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [642, 420]}, "delay_after_ms": 3520.0},
-    {"action_type": "type", "params": {"text": "{{password}}"}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [759, 519]}, "delay_after_ms": 3520.0},
-    {"action_type": "key", "params": {"text": "F12"}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [1017, 357]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [1245, 624]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [1180, 658]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click", "params": {"coordinate": [170, 322]}, "delay_after_ms": 3520.0},
-    {"action_type": "scroll", "params": {"coordinate": [740, 800], "scroll_direction": "down", "scroll_amount": 5}, "delay_after_ms": 520.0}
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          642,
+          470
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          538,
+          535
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          642,
+          371
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          681,
+          419
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          642,
+          420
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "type",
+      "params": {
+        "text": "{{password}}"
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          759,
+          519
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "key",
+      "params": {
+        "text": "F12"
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          1017,
+          357
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          1245,
+          624
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          1180,
+          658
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "left_click",
+      "params": {
+        "coordinate": [
+          170,
+          322
+        ]
+      },
+      "delay_after_ms": 3520.0
+    },
+    {
+      "action_type": "scroll",
+      "params": {
+        "coordinate": [
+          740,
+          800
+        ],
+        "scroll_direction": "down",
+        "scroll_amount": 5
+      },
+      "delay_after_ms": 520.0
+    },
+    {
+      "action_type": "triple_click",
+      "params": {
+        "coordinate": [
+          900,
+          750
+        ]
+      },
+      "delay_after_ms": 500.0
+    }
   ],
   "recorded_at": "2026-05-13T14:00:00+00:00",
-  "use_count": 0
+  "use_count": 2
 }

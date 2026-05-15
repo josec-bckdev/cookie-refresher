@@ -125,9 +125,11 @@ class ReplaySessionUseCase:
                     {
                         "type": "text",
                         "text": (
-                            "The browser login flow is complete and DevTools is open on the Network tab.\n"
-                            "Find the 'cookie:' request header in the visible request headers panel.\n"
-                            "Triple-click its value to select it, then read both cookie values and output:\n"
+                            "The automated login is complete. The screenshot shows the Network tab "
+                            "in DevTools with a request selected and its headers visible.\n\n"
+                            "READ the 'cookie:' request header value directly from the screenshot. "
+                            "The values are already visible — do NOT take any actions or use any tools.\n\n"
+                            "Output EXACTLY this on its own line with the real values:\n"
                             'COOKIES_JSON: {"cf_clearance": "<value>", "ci_session": "<value>"}'
                         ),
                     },

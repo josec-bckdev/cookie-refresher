@@ -1,4 +1,5 @@
 """Centralised configuration via pydantic-settings (reads .env automatically)."""
+
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,8 +24,8 @@ class Settings(BaseSettings):
     login_password: str
 
     # Scheduler (Mon–Fri, America/Bogota timezone)
-    schedule_morning: str = "45 5 * * 1-5"    # 5:45 AM
-    schedule_afternoon: str = "0 15 * * 1-5"  # 3:00 PM
+    schedule_morning: str = "40 5 * * 1-5"  # 5:40 AM
+    schedule_afternoon: str = "10 15 * * 1-5"  # 3:10 PM
     timezone: str = "America/Bogota"
 
     # Action script recording / replay
