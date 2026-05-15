@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from .entities import ActionScript, AgentResult, Job, SessionCookies, AgentStep
+from .entities import ActionScript, AgentResult, Job, SessionCookies, AgentStep, ProgrammedScript
 
 
 class IBrowserGateway(ABC):
@@ -49,6 +49,11 @@ class IBrowserGateway(ABC):
         """Stop the browser sandbox container and release held resources."""
         ...
 
+    @abstractmethod
+    async def get_cookies(self, names: list[str]) -> SessionCookies:
+        """Read named cookies directly from the browser's cookie jar."""
+        ...
+
 
 class IVtrackGateway(ABC):
     """Delivers refreshed cookies to the vtrack FastAPI service."""
@@ -85,3 +90,10 @@ class IActionScriptStore(ABC):
 
     @abstractmethod
     async def load(self) -> Optional[ActionScript]: ...
+
+
+class IProgrammedScriptStore(ABC):
+    """Loads the human-authored programmed action script (read-only)."""
+
+    @abstractmethod
+    async def load(self) -> Optional[ProgrammedScript]: ...

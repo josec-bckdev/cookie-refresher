@@ -181,3 +181,6 @@ class VncBrowserGateway(IBrowserGateway):
             "/mouse/drag",
             json={"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y},
         )
+
+    async def get_cookies(self, names: list[str]) -> "SessionCookies":
+        raise NotImplementedError("get_cookies not yet implemented")
