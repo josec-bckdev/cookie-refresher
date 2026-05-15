@@ -3,15 +3,17 @@ Application factory — wires all layers together.
 
 Dependency graph (outer → inner, each only imports from its own layer or inward):
   infrastructure/main.py
-    → adapters/controllers/api.py         (FastAPI routes)
-    → adapters/gateways/vnc_browser.py    (IBrowserGateway impl)
-    → adapters/gateways/vtrack_http.py    (IVtrackGateway impl)
-    → adapters/action_script_store.py     (IActionScriptStore impl)
-    → infrastructure/anthropic_client.py  (IAgentClient impl)
+    → adapters/controllers/api.py              (FastAPI routes)
+    → adapters/gateways/vnc_browser.py         (IBrowserGateway impl)
+    → adapters/gateways/vtrack_http.py         (IVtrackGateway impl)
+    → adapters/action_script_store.py          (IActionScriptStore impl)
+    → adapters/programmed_script_store.py      (IProgrammedScriptStore impl)
+    → infrastructure/anthropic_client.py       (IAgentClient impl)
+    → application/use_cases/no_agent_steps.py  (zero-AI programmed use case)
     → application/use_cases/refresh_session.py (full ReAct use case)
     → application/use_cases/replay_session.py  (fast replay use case)
-    → infrastructure/scheduler.py         (cron)
-    → infrastructure/settings.py          (config)
+    → infrastructure/scheduler.py              (cron)
+    → infrastructure/settings.py               (config)
 """
 import logging
 from contextlib import asynccontextmanager
@@ -22,10 +24,12 @@ from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
 from cookie_refresher.adapters.action_script_store import FileActionScriptStore
+from cookie_refresher.adapters.programmed_script_store import FileProgrammedScriptStore
 from cookie_refresher.adapters.controllers.api import router, set_job_store, set_use_case_factory
 from cookie_refresher.adapters.job_store import InMemoryJobStore
 from cookie_refresher.adapters.gateways.vnc_browser import VncBrowserGateway
 from cookie_refresher.adapters.gateways.vtrack_http import VtrackHttpGateway
+from cookie_refresher.application.use_cases.no_agent_steps import NoAgentStepsUseCase
 from cookie_refresher.application.use_cases.refresh_session import RefreshSessionUseCase
 from cookie_refresher.application.use_cases.replay_session import ReplaySessionUseCase
 from cookie_refresher.infrastructure.anthropic_client import AnthropicAgentClient
@@ -40,6 +44,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _script_store = FileActionScriptStore(settings.action_script_path)
+_programmed_store = FileProgrammedScriptStore(settings.programmed_script_path)
+
+_LOGIN_URL = "https://www.rutasljrj.net/rastreo/ljrj/login"
 
 
 def _make_agent() -> AnthropicAgentClient:
@@ -62,10 +69,22 @@ def _make_vtrack() -> VtrackHttpGateway:
 
 
 async def _build_use_case():
+    programmed = await _programmed_store.load()
+    if programmed:
+        logger.info("Programmed mode — %d steps, zero AI calls", len(programmed.steps))
+        return NoAgentStepsUseCase(
+            browser=_make_browser(),
+            vtrack=_make_vtrack(),
+            script=programmed,
+            login_url=_LOGIN_URL,
+            login_email=settings.login_email,
+            login_password=settings.login_password,
+        )
+
     script = await _script_store.load()
     if script:
         logger.info(
-            "Replay mode selected — script has %d steps, used %d times",
+            "Replay mode — script has %d steps, used %d times",
             len(script.steps),
             script.use_count,
         )
@@ -74,13 +93,14 @@ async def _build_use_case():
             vtrack=_make_vtrack(),
             agent=_make_agent(),
             script=script,
-            login_url=settings.vtrack_login_url if hasattr(settings, "vtrack_login_url") else "https://www.rutasljrj.net/rastreo/ljrj/login",
+            login_url=_LOGIN_URL,
             login_email=settings.login_email,
             login_password=settings.login_password,
             randomness_pct=settings.replay_randomness_pct,
             script_store=_script_store,
         )
-    logger.info("No action script found — running full ReAct loop (will record on success)")
+
+    logger.info("No script found — running full ReAct loop (will record on success)")
     return RefreshSessionUseCase(
         browser=_make_browser(),
         vtrack=_make_vtrack(),
