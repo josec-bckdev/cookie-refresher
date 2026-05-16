@@ -30,13 +30,10 @@
       },
       "delay_after_ms": 3520.0
     },
-    {
-      "action_type": "left_click",
+        {
+      "action_type": "type",
       "params": {
-        "coordinate": [
-          681,
-          419
-        ]
+        "text": "{{email}}"
       },
       "delay_after_ms": 3520.0
     },

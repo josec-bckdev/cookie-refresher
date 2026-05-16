@@ -3,7 +3,7 @@
     {"action_type": "left_click",  "params": {"coordinate": [642, 470]}, "delay_after_ms": 3520.0},
     {"action_type": "left_click",  "params": {"coordinate": [538, 535]}, "delay_after_ms": 3520.0},
     {"action_type": "left_click",  "params": {"coordinate": [642, 371]}, "delay_after_ms": 3520.0},
-    {"action_type": "left_click",  "params": {"coordinate": [681, 419]}, "delay_after_ms": 3520.0},
+    {"action_type": "type",        "params": {"text": "{{email}}"},   "delay_after_ms": 3520.0},
     {"action_type": "left_click",  "params": {"coordinate": [642, 420]}, "delay_after_ms": 3520.0},
     {"action_type": "type",        "params": {"text": "{{password}}"},   "delay_after_ms": 3520.0},
     {"action_type": "left_click",  "params": {"coordinate": [759, 519]}, "delay_after_ms": 8000.0},
